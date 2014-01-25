@@ -1,11 +1,7 @@
-function [ weights ] = linearRegression( learningRate,  numIters, XTrain, YTrain )
+function [ weights, MSEs ] = linearRegression( learningRate,  numIters, XTrain, YTrain )
 
 % Prepend a column of ones
 X = [ones(length(XTrain), 1) XTrain];
-
-% Feature standaradization
-% X = bsxfun(@minus, X, mean(X));
-% X = bsxfun(@ldivide, X, std(X));
 
 % Init the weights
 weightInitRange = [-0.1; 0.1];
@@ -16,7 +12,7 @@ T = size(XTrain, 1);
 MSEs = zeros(numIters, 1);
 for i = 1 : numIters
     % Compute the predictions
-    YPred = sum(bsxfun(@times, X, weights), 2);
+    YPred = X * weights';
     
     % Compute negative derivatives
     derivatives = (2/T) .* sum(bsxfun(@times, X, YTrain - YPred));
@@ -26,8 +22,6 @@ for i = 1 : numIters
     
     MSEs(i) = meanSquaredError(YPred, YTrain);
 end
-
-plot(1:numIters, MSEs);
 
 end
 

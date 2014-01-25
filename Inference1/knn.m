@@ -1,14 +1,18 @@
-function [ YPredictions ] = knn( XTest, XTraining, YTraining, N, isLogistic )
+function [ YPredictions ] = knn( XTest, XTraining, YTraining, k, type)
 
-YPredictions = zeros(length(XTest), 1);
-for i = 1:length(YPredictions)
+T = size(XTest, 1);
+YPredictions = zeros(T, 1);
+
+for i = 1:T
     x_val = XTest(i);
-    [~, min_indices] = sort((abs(XTraining - x_val)));
-    nearestNeighbours = YTraining(min_indices(1:N));
-    if isLogistic
-        YPredictions(i) = mode(nearestNeighbours);
-    else
-        YPredictions(i) = mean(nearestNeighbours);
+    for j = 1:size(XTraining, 1)
+        [~, min_indices] = sort((abs(XTraining - x_val)));
+        nearestNeighbours = YTraining(min_indices(1:k));
+        if type == 0
+            YPredictions(i) = mode(nearestNeighbours);
+        elseif type == 1
+            YPredictions(i) = mean(nearestNeighbours);
+        end
     end
 end
 
