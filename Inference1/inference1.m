@@ -186,27 +186,113 @@ display(confusion);
 % also the test classification error rate.
 
 kvals = 1:2:11;
-CYProb = zeros(length(CYValidation), length(kvals));
 logLikelikehoods = zeros(length(kvals), 1);
 
-for k_ind = 1 : length(kvals)
+for k_ind = 1:length(kvals)
     k = kvals(k_ind);
-    for i = 1:length(CXValidation)
-        CYProb(i, k) = knn_prob(CXValidation(i), CXTraining, CYTraining, k);
-    end
-    logLikelikehoods(k_ind) = logLikelihood(CYProb(:, k_ind), CYValidation);
+    CYPredProb = knn(CXValidation, CXTraining, CYTraining, k, 2);
+    logLikelikehoods(k_ind) = logLikelihood(CYPredProb, CYValidation);
     fprintf('log likelihood for k=%d is %f\n', k, logLikelikehoods(k_ind));
 %     plotKnn(RXValidation, RYPredictions(:, k), RXTraining, RYTraining, k);
 end
-[max_val, max_ind] = max(logLikelikehoods);
-fprintf('Highest log likelihood k=%d with value of %f\n', kvals(max_ind), max_val);
 
-% % Using the best k, try on the test set
-% CYProb = zeros(length(CYTest), 1);
-% for i = 1:length(CXTest)
-%     CYProb(i) = knn(CXTest(i), CXTraining, CYTraining, kvals(max_ind), true);
-% end 
-% 
-% fprintf('On the test data, classification errror for k=%d is %f\n' , kvals(max_ind), classificationErrorRate(CYProb, CYTest));
+[max_likelihood, best_k_ind] = max(logLikelikehoods);
+best_k = kvals(best_k_ind);
 
+fprintf('Lowest validation error for k=%d with log likelihood of  %f\n', best_k, max_likelihood);
+
+% Using the best k, try on the test set
+CYPred = knn(CXTest, CXTraining, CYTraining, best_k, 0);
+errorRate = classificationErrorRate(CYPred, CYTest);
+CYPredProb = knn(CXTest, CXTraining, CYTraining, best_k, 2);
+logLike = logLikelihood(CYPredProb, CYTest);
+fprintf('On the test data for k=%d log likelihood is %f, classifcation error is %f\n' , best_k, logLike, errorRate);
+
+%% 2d
+
+% Linear regression. We can cheat and pretend that the labels 0 and 1 are real numbers. Use the 
+% steepest descent method to fit a linear regression model (two parameters) to the training data. 
+% Apply this model to the test data. The resulting predictions will be real numbers. Apply a 
+% threshold of 0.5 to obtain binary predictions and report the classification error rate. Compare to 
+% the rates obtained in (2a) to (2c). To test the effect of the threshold, repeat the above procedure 
+% for a range of thresholds and plot the test error rate versus the threshold.
+
+learningRate = 0.0001;
+numIters = 50000;
+
+[CXTrainingNormalized, mu, sigma] = normalize_features(CXTraining);
+weights = linearRegression(learningRate, numIters, CXTrainingNormalized, CYTraining);
+
+XTestNormalized = normalize(CXTest, mu, sigma);
+YPred = applyWeights(XTestNormalized, weights);
+
+thresholds = 0.1:0.1:0.9;
+classificationErrorRates = zeros(length(thresholds), 1);
+
+for i = 1:length(thresholds);
+    predictions = YPred > thresholds(i);
+    classificationErrorRates(i) = classificationErrorRate(predictions, CYTest);
+end
+
+plot(thresholds, classificationErrorRates, 'ob');
+
+%% 2e
+
+% e) Linear regression using polynomial inputs. Expand the input x to form a vector of inputs (x, ), for a positive integer k. Use steepest descent to fit linear regression models to the 
+% training data, for k ranging from 1 to 10. For each model, threshold the predictions for the 
+% validation cases and compute and report the 10 corresponding values of the validation error 
+% rate. Which value of k achieves the lowest validation error? Use that value of k to make 
+% predictions for the 100 test cases and report the test error rate. Discuss how this value compares 
+% to the error rates reported in (2a) to (2d). 
+
+learningRate = 0.0001;
+numIters = 50000;
+thresh = 0.5;
+
+ClassificationXExpanded = zeros(size(ClassificationX, 1), 10);
+for k = 1:10
+    ClassificationXExpanded(:, k) = ClassificationX .^ k;
+end
+
+CXTestExpanded = ClassificationXExpanded(test_ind, :);
+CXValidationExpanded = ClassificationXExpanded(validation_ind, :);
+CXTrainingExpanded = ClassificationXExpanded(training_ind, :);
+
+weights = zeros(10, 11);
+
+[CXTrainingNormalized, mu, sigma] = normalize_features(CXTrainingExpanded);
+
+classificationErrorRates = zeros(10, 1);
+
+for k = 1:10
+    % Fit a model
+    XData = CXTrainingNormalized(:, 1:k);
+    k_weights = linearRegression(learningRate, numIters, XData, CYTraining);
+    weights(k, 1:k+1) = k_weights;
+    
+    % Make predictions for the validation cases
+    XValidationData = normalize(CXValidationExpanded(:, 1:k), mu(1:k), sigma(1:k));
+    YPred = applyWeights(XValidationData, k_weights) > thresh;
+    classificationErrorRates(k) = classificationErrorRate(YPred, CYValidation);
+end
+
+display(classificationErrorRates);
+[min_CE, best_k] = min(classificationErrorRates);
+fprintf('Minimum ce for k=%d is %f\n', best_k, min_CE);
+
+XTestData = normalize(CXTestExpanded(:, 1:best_k), mu(1:best_k), sigma(1:best_k));
+YPred = applyWeights(XTestData, weights(best_k, 1:best_k+1)) > thresh;
+ce = classificationErrorRate(YPred, CYTest);
+
+fprintf('CE for test set is %f\n', ce);
+
+%% 2f
+
+% e) Linear regression using polynomial inputs. Expand the input x to form a vector of inputs (x, 
+% ), for a positive integer k. Use steepest descent to fit linear regression models to the 
+% training data, for k ranging from 1 to 10. For each model, threshold the predictions for the 
+% validation cases and compute and report the 10 corresponding values of the validation error 
+% rate. Which value of k achieves the lowest validation error? Use that value of k to make 
+% predictions for the 100 test cases and report the test error rate. Discuss how this value compares 
+% to the error rates reported in (2a) to (2d). 
 

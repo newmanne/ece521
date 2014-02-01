@@ -12,6 +12,9 @@ for i = 1:T
             YPredictions(i) = mode(nearestNeighbours);
         elseif type == 1
             YPredictions(i) = mean(nearestNeighbours);
+        elseif type == 2
+            % Probability of it being a one
+            YPredictions(i) = 0.1 + length(find(nearestNeighbours == 1));
         end
     end
 end
