@@ -1,7 +1,7 @@
 function [ w, error ] = trainNN( k, learningRate, nIters, XTraining, YTraining )
 
     error = zeros(nIters, 1);
-    N = length(RXTraining);
+    N = length(XTraining);
 
     w = zeros(k + 3, k + 3);
     w(1, 3:k+3) = rand(1, length(3:k+3));
@@ -14,7 +14,7 @@ function [ w, error ] = trainNN( k, learningRate, nIters, XTraining, YTraining )
 
     g = zeros(N, k+3);
     g(:, 1) = 1;
-    g(:, 2) = RXTraining;
+    g(:, 2) = XTraining;
 
     dedx = zeros(N, k+3);
 
@@ -25,8 +25,8 @@ function [ w, error ] = trainNN( k, learningRate, nIters, XTraining, YTraining )
         end
         xx(:, k+3) = g * w(:, k+3);
         g(:, k+3) = xx(:, k+3);
-        error(i, q) = meanSquaredError(g(:,k+3), YTraining);
-        dedx(:, k+3) = 2 * (g(:,k+3) - RYTraining);
+        error(i) = meanSquaredError(g(:,k+3), YTraining);
+        dedx(:, k+3) = 2 * (g(:,k+3) - YTraining);
         for m = k+2:-1:3
             dedx(:, m) = dedx(:, m+1:k+3) * w(m, m+1:k+3)' .* g(:, m) .* (1 - g(:,m));
         end

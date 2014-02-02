@@ -1,26 +1,4 @@
-%% Load the variables
-RegressionX = load('RegressionX.txt');
-RegressionY = load('RegressionY.txt');
-
-%% Split into training, validation, and testing
-
-training_ind = 1:50;
-validation_ind = 51:100;
-test_ind = 101:200;
-
-RXTraining = RegressionX(training_ind);
-RYTraining = RegressionY(training_ind);
-
-RXValidation = RegressionX(validation_ind);
-RYValidation = RegressionY(validation_ind);
-
-RXTest = RegressionX(test_ind);
-RYTest = RegressionY(test_ind);
-
-%% Normalize
-[RXTraining, mu, sigma] = normalize_features(RXTraining);
-RXValidation = normalizeFromMuSigma(RXValidation, mu, sigma);
-RXTest = normalizeFromMuSigma(RXTest, mu, sigma);
+[RXTraining, RYTraining, RXValidation, RYValidation, RXTest, RYTest] = loadVars();
 
 %%
 % e) Neural networks: Plotting training error and selecting the learning rate. Implement a steepest 
@@ -40,67 +18,29 @@ RXTest = normalizeFromMuSigma(RXTest, mu, sigma);
 
 % plot(RegressionX, RegressionY, 'ro');
 k = 5;
-learningRates = ones(5, 1);
-for i = 1:length(learningRates)
-    learningRates(i) = 0.01./(10^i);
-end
 nIters = 10000;
-error = zeros(nIters, length(learningRates));
-N = length(RXTraining);
-
-for q = 1:length(learningRates)
-    w = zeros(k + 3, k + 3);
-    w(1, 3:k+3) = rand(1, length(3:k+3));
-    w(2, 3:k+2) = rand(1, length(3:k+2));
-    w(3:k+2, k+3) = rand(length(3:k+2), 1);
-
-    xx = zeros(N, k + 3);
-    xx(:, 1) = 1;
-    xx(:, 2) = RXTraining;
-
-    g = zeros(N, k+3);
-    g(:, 1) = 1;
-    g(:, 2) = RXTraining;
-
-    dedx = zeros(N, k+3);
-
-
-    for i = 1:nIters
-        for j = 3:k+2
-            xx(:, j) = g * w(:, j);
-            g(:, j) = 1./(1 + exp(-xx(:, j)));
-        end
-        xx(:, k+3) = g * w(:, k+3);
-        g(:, k+3) = xx(:, k+3);
-        error(i, q) = meanSquaredError(g(:,k+3), RYTraining);
-        dedx(:, k+3) = 2 * (g(:,k+3) - RYTraining);
-        for m = k+2:-1:3
-            dedx(:, m) = dedx(:, m+1:k+3) * w(m, m+1:k+3)' .* g(:, m) .* (1 - g(:,m));
-        end
-        del = g' * dedx;
-        w = w - learningRates(q) * del .* (w ~= 0);
-    %     if (mod(it, 1000) == 0)
-    %         plot(RXTraining, RYTraining, 'bo', RXTraining, g(:, k+3), 'g+');
-    %         pause(0.5);
-    %     end
-    end
-    % plot(RXTraining, g(:, k+3), 'y+');
-end
-
-% semilogx(1:nIters, error(:, 1), 'ro', 1:nIters, error(:, 2), 'yo', 1:nIters, error(:, 3), 'bo');
+learningRates = zeros(1, 5);
 figure
-cc=hsv(length(learningRates));
-hold on
-for i = 1:length(learningRates)
-    semilogx(1:nIters, error(:, i), 'color', cc(i, :));
-end
 title('Training error vs Epoch for different LR');
 xlabel('Epoch');
 ylabel('Training error (MSE)');
+cc = hsv(length(learningRates));
+hold on
+for i = 1:length(learningRates)
+    learningRates(i) = 0.01./(10^i);
+    [w, error] = trainNN(k, learningRates(i), nIters, RXTraining, RYTraining);       
+    semilogx(1:nIters, error, 'color', cc(i, :));
+end
 legend(cellfun(@num2str,num2cell(learningRates),'uniformoutput',0));
 hold off
 
-% TODO: report test error
+%% select lr = 0.001
+learningRate = 0.001;
+[w, ~] = trainNN(k, learningRate, nIters, RXTraining, RYTraining);       
+YPred = applyNN(w, RXTest);
+error = meanSquaredError(YPred, RYTest);
+fprintf('Error %f\n', error);
+% plot(RXTest, RYTest, 'bo', RXTest, YPred, 'g+');
 
 %%
 % f) Neural networks: Random restarts. Sometimes, the training algorithm can get stuck in poor 
@@ -111,47 +51,122 @@ hold off
 % test error obtained in (1e).
 
 k = 5;
+nIters = 10000;
 numTrials = 20;
 learningRate = 0.001;
-nIters = 10000;
-error = zeros(nIters, numTrials);
-N = length(RXTraining);
+errors = zeros(numTrials, 1);
+weights = cell(20, 1);
 
-for q = 1:numTrials
-    w = zeros(k + 3, k + 3);
-    w(1, 3:k+3) = rand(1, length(3:k+3));
-    w(2, 3:k+2) = rand(1, length(3:k+2));
-    w(3:k+2, k+3) = rand(length(3:k+2), 1);
-
-    xx = zeros(N, k + 3);
-    xx(:, 1) = 1;
-    xx(:, 2) = RXTraining;
-
-    g = zeros(N, k+3);
-    g(:, 1) = 1;
-    g(:, 2) = RXTraining;
-
-    dedx = zeros(N, k+3);
-
-
-    for i = 1:nIters
-        for j = 3:k+2
-            xx(:, j) = g * w(:, j);
-            g(:, j) = 1./(1 + exp(-xx(:, j)));
-        end
-        xx(:, k+3) = g * w(:, k+3);
-        g(:, k+3) = xx(:, k+3);
-        error(i, q) = meanSquaredError(g(:,k+3), RYTraining);
-        dedx(:, k+3) = 2 * (g(:,k+3) - RYTraining);
-        for m = k+2:-1:3
-            dedx(:, m) = dedx(:, m+1:k+3) * w(m, m+1:k+3)' .* g(:, m) .* (1 - g(:,m));
-        end
-        del = g' * dedx;
-        w = w - learningRates(q) * del .* (w ~= 0);
-    %     if (mod(it, 1000) == 0)
-    %         plot(RXTraining, RYTraining, 'bo', RXTraining, g(:, k+3), 'g+');
-    %         pause(0.5);
-    %     end
-    end
-    % plot(RXTraining, g(:, k+3), 'y+');
+for i = 1:numTrials
+    [weights{i}, error] = trainNN(k, learningRate, nIters, RXTraining, RYTraining);       
+    errors(i) = error(end);
 end
+
+hist(errors);
+title('Histogram of Training Error');
+xlabel('Training error');
+ylabel('Counts');
+
+[~, bestInd] = min(errors);
+
+YPred = applyNN(weights{bestInd}, RXTest);
+error = meanSquaredError(YPred, RYTest);
+fprintf('Error %f\n', error);
+
+
+%%
+% g) Neural networks: Selecting the number of hidden units. Using the learning rate selected in (e) 
+% and the 20-random-restart method developed in (f), train neural networks with k ranging from 1 
+% to 10. (Note that for each value of k, you will train 20 models and pick the one with the lowest 
+% training error.) Compute and report the validation error for these 10 models. Which value of k 
+% achieves the lowest validation error? Use the model with lowest validation error to make 
+% predictions for the 100 test cases and report the MSE on the test set. Discuss how this value 
+% compares to the MSE reported in (1a) to (1f). 
+
+nIters = 10000;
+numTrials = 20;
+maxK = 10;
+learningRate = 0.001;
+weights = cell(maxK, 1);
+validationErrors = zeros(maxK, 1);
+for k = 1:maxK
+    minError = intmax;
+    for i = 1:numTrials
+        [w, error] = trainNN(k, learningRate, nIters, RXTraining, RYTraining);       
+        if error(end) < minError
+            minError = error(end);
+            weights{k} = w;
+        end
+    end
+    validationErrors(k) = applyNN(weights{k}, RXValidation, RYValidation);
+end
+
+[~, bestK] = min(validationErrors);
+error = applyNN(weights{bestK}, RXTest, RYTest);
+fprintf('Error %f\n', error);
+
+
+%%
+% h) Neural networks: Early stopping. Modify your software so that it computes the validation 
+% error and stores the model parameters after each epoch of learning. For k=10, generate and 
+% submit a single plot that includes both the training error and the validation error versus the 
+% number of epochs. (You do not need to use the 20-random-restart method here.) Determine the 
+% number of epochs that achieves the lowest validation error and report this value. Report the test 
+% error for this model and discuss how this value compares to those from (1a) to (1g). 
+
+k = 10;
+learningRate = 0.001;
+nIters = 1000000;
+trainingError = zeros(nIters, 1);
+validationError = zeros(nIters, 1);
+N = length(RXTraining);
+weights = zeros(k + 3, k + 3, nIters);
+
+w = zeros(k + 3, k + 3);
+w(1, 3:k+3) = rand(1, length(3:k+3));
+w(2, 3:k+2) = rand(1, length(3:k+2));
+w(3:k+2, k+3) = rand(length(3:k+2), 1);
+
+xx = zeros(N, k + 3);
+xx(:, 1) = 1;
+xx(:, 2) = RXTraining;
+
+g = zeros(N, k+3);
+g(:, 1) = 1;
+g(:, 2) = RXTraining;
+
+dedx = zeros(N, k+3);
+
+for i = 1:nIters
+    for j = 3:k+2
+        xx(:, j) = g * w(:, j);
+        g(:, j) = 1./(1 + exp(-xx(:, j)));
+    end
+    xx(:, k+3) = g * w(:, k+3);
+    g(:, k+3) = xx(:, k+3);
+    trainingError(i) = meanSquaredError(g(:,k+3), RYTraining);
+    validationError(i) = applyNN(w, RXValidation, RYValidation);
+    weights(:, :, i) = w;
+    dedx(:, k+3) = 2 * (g(:,k+3) - RYTraining);
+    for m = k+2:-1:3
+        dedx(:, m) = dedx(:, m+1:k+3) * w(m, m+1:k+3)' .* g(:, m) .* (1 - g(:,m));
+    end
+    del = g' * dedx;
+    w = w - learningRate * del .* (w ~= 0);
+end
+plot(1:nIters, trainingError, 'r-', 1:nIters, validationError, 'b-');
+title('Training/Validation Error vs Epochs');
+xlabel('Epoch');
+ylabel('Error');
+legend('Training Error', 'Validation Error');
+
+[~, minInd] = min(validationError);
+fprintf('Using weights from epoch %d out of %d\n', minInd, nIters);
+bestWeights = weights(:, :, minInd);
+testError = applyNN(bestWeights, RXTest, RYTest);
+fprintf('Test Error %f\n', testError);
+
+%%
+
+
+
